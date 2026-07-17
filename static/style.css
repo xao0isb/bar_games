@@ -68,10 +68,20 @@ body.host {
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
 }
-.overlay-card h1 { margin: 0 0 8px; font-size: 36px; }
+.overlay-card h1 { margin: 0 0 8px; font-size: 34px; text-wrap: balance; }
 .overlay-card p { margin: 6px 0; font-size: 18px; opacity: .92; }
+.overlay-card .who { font-size: 22px; font-weight: 700; margin: 2px 0 4px; opacity: .95; }
 .overlay-card .score { font-size: 60px; font-weight: 800; margin: 6px 0; line-height: 1; }
 .overlay-card .hint { font-size: 15px; opacity: .68; margin-top: 16px; line-height: 1.35; }
+.overlay-card .ov-avatar {
+  display: block;
+  width: 96px; height: 96px;
+  margin: 0 auto 12px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid #ffd84a;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .4);
+}
 
 /* ============================ CONTROLLER / phone ========================== */
 body.controller {
@@ -89,11 +99,13 @@ body.controller {
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
 }
+/* the hidden attribute must win over the flex display rules below */
+.controller [hidden] { display: none !important; }
 
 .controller .status {
   flex: 0 0 auto;
   text-align: center;
-  padding: 16px 14px;
+  padding: 14px;
   font-size: 14px;
   font-weight: 600;
   letter-spacing: .3px;
@@ -106,9 +118,97 @@ body.controller {
 }
 .controller .status.ok::before { color: #57f08a; }
 
+/* ---- setup screen (name + photo) ---- */
+.setup {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 20px 24px 32px;
+}
+.setup-title { margin: 0 0 4px; font-size: 34px; font-weight: 800; }
+.photo-picker { cursor: pointer; }
+.photo-preview {
+  width: 150px; height: 150px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; font-weight: 700; color: #fff;
+  background: rgba(255, 255, 255, .14);
+  background-size: cover;
+  background-position: center;
+  border: 3px dashed rgba(255, 255, 255, .75);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .2);
+}
+.photo-preview.has-photo { border-style: solid; border-color: #fff; }
+.photo-preview .ph { font-size: 17px; line-height: 1.25; opacity: .95; }
+.photo-preview.has-photo .ph { display: none; }
+
+.name-input {
+  width: min(88vw, 320px);
+  padding: 14px 16px;
+  border: none;
+  border-radius: 14px;
+  font-size: 18px;
+  text-align: center;
+  background: rgba(255, 255, 255, .96);
+  color: #12303a;
+}
+.name-input:focus { outline: 3px solid rgba(255, 255, 255, .65); }
+.name-input::placeholder { color: #7a97a1; }
+
+.start-btn {
+  width: min(88vw, 320px);
+  padding: 16px;
+  border: none;
+  border-radius: 16px;
+  font-size: 20px;
+  font-weight: 800;
+  color: #5c3d00;
+  background: linear-gradient(180deg, #ffd84a, #f4b400);
+  box-shadow: 0 8px 0 #c98f00, 0 14px 24px rgba(0, 0, 0, .25);
+  cursor: pointer;
+  transition: transform .06s ease, box-shadow .06s ease;
+}
+.start-btn:disabled {
+  opacity: .5;
+  box-shadow: 0 8px 0 rgba(0, 0, 0, .2);
+  cursor: not-allowed;
+}
+.start-btn:active:not(:disabled) {
+  transform: translateY(6px);
+  box-shadow: 0 2px 0 #c98f00, 0 6px 12px rgba(0, 0, 0, .25);
+}
+.setup-hint { margin: 0; max-width: 280px; text-align: center; font-size: 14px; opacity: .9; }
+
+/* ---- control screen (the big button) ---- */
+.control {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+.me {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 8px 12px 2px;
+  font-weight: 700;
+  font-size: 17px;
+}
+.me-avatar {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #fff;
+  background: rgba(255, 255, 255, .3);
+}
+
 #flap-btn {
   flex: 1 1 auto;
-  margin: 6px 18px;
+  margin: 8px 18px;
   border: none;
   border-radius: 30px;
   background: linear-gradient(180deg, #ffd84a, #f4b400);
@@ -139,7 +239,7 @@ body.controller {
 .controller .hint {
   flex: 0 0 auto;
   text-align: center;
-  padding: 14px 14px 26px;
+  padding: 12px 14px 24px;
   font-size: 14px;
   opacity: .85;
 }

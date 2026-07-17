@@ -17,7 +17,12 @@
       "Bash(docker port *)",
       "Bash(curl -s --retry 10 --retry-delay 1 --retry-all-errors -o /dev/null -w \"health via 8125: %{http_code}\\\\n\" http://127.0.0.1:8125/health)",
       "Bash(docker run *)",
-      "Bash(docker rmi *)"
+      "Bash(docker rmi *)",
+      "Read(//run/**)",
+      "Bash(getent group *)",
+      "Bash(systemctl is-active *)",
+      "Bash(node --check static/host.js)",
+      "Artifact"
     ]
   }
 }

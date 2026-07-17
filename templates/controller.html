@@ -4,18 +4,37 @@
   <meta charset="utf-8">
   <meta name="viewport"
         content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-  <title>Flappy — Пульт</title>
+  <title>Flappy Beer — Пульт</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="controller">
   <div id="status" class="status">Подключение…</div>
 
-  <button id="flap-btn" type="button">
-    <span id="btn-label">ПРЫЖОК</span>
-    <span class="score-wrap">Счёт:&nbsp;<span id="score">0</span></span>
-  </button>
+  <!-- Step 1: the player sets a name and a photo (the photo becomes the character) -->
+  <div id="setup" class="setup">
+    <h1 class="setup-title">🍺 Flappy Beer</h1>
+    <label class="photo-picker">
+      <input type="file" id="photo-input" accept="image/*" hidden>
+      <span id="photo-preview" class="photo-preview"><span class="ph">＋<br>Фото</span></span>
+    </label>
+    <input type="text" id="name-input" class="name-input"
+           placeholder="Ваше имя" maxlength="20" autocomplete="off" autocapitalize="words">
+    <button id="start-btn" class="start-btn" type="button" disabled>Играть</button>
+    <p class="setup-hint">Добавьте фото — оно станет вашим персонажем в игре</p>
+  </div>
 
-  <div class="hint">Нажимайте, чтобы птичка прыгала</div>
+  <!-- Step 2: the controller — one big button -->
+  <div id="control" class="control" hidden>
+    <div class="me">
+      <img id="me-avatar" class="me-avatar" alt="">
+      <span id="me-name"></span>
+    </div>
+    <button id="flap-btn" type="button">
+      <span id="btn-label">ПРЫЖОК</span>
+      <span class="score-wrap">Счёт:&nbsp;<span id="score">0</span></span>
+    </button>
+    <div class="hint">Нажимайте, чтобы прыгать</div>
+  </div>
 
   <script>const SESSION_ID = "{{ session_id }}";</script>
   <script src="/static/controller.js"></script>

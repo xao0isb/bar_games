@@ -1,12 +1,13 @@
-"""Flappy Bird played on a big screen, controlled from a phone via a QR code.
+"""Flappy Beer played on a big screen, controlled from a phone via a QR code.
 
 Flow
 ----
 1. The main screen opens ``/`` and shows a QR code.
 2. A player scans it and lands on ``/controller/<session_id>`` — a single big button.
 3. Tapping the button sends a "flap" event over a WebSocket. The server relays it
-   to the main screen, where the Flappy Bird game (running in the browser) makes the
-   bird jump.
+   to the main screen, where the Flappy Beer game (running in the browser) makes the
+   player's avatar jump. The player sets a name and photo on their phone first; the
+   photo becomes the flying character. Obstacles are drinks — beer, soju and shots.
 
 The game physics/rendering live in the browser (``static/host.js``); the server is a
 thin real-time relay between the controller(s) and the host screen of a session.
@@ -27,7 +28,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-app = FastAPI(title="Flappy Bird — QR Controller")
+app = FastAPI(title="Flappy Beer — QR Controller")
 
 # --------------------------------------------------------------------------- #
 # Deployment settings (environment-driven)

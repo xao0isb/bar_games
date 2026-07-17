@@ -10,7 +10,7 @@
 # Binds to localhost only; put Nginx (deploy/nginx.conf) in front for TLS.
 
 [Unit]
-Description=Flappy Bird QR game
+Description=Flappy Beer QR game
 After=network.target
 
 [Service]
