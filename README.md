@@ -14,7 +14,7 @@ QR-код телефоном, открывает страницу с одной 
 
 Стек: **Python + FastAPI**, WebSocket для реального времени, игра на HTML5 Canvas.
 
-## Запуск
+## Локальный запуск (разработка)
 
 ```bash
 ./run.sh
@@ -48,6 +48,88 @@ uvicorn main:app --host 0.0.0.0 --port 8000
 4. Как только телефон подключится, на экране появится «Приготовьтесь!». Нажмите кнопку
    на телефоне — птичка взлетит и игра начнётся.
 5. После проигрыша нажмите кнопку ещё раз, чтобы сыграть заново.
+
+## Развёртывание на сервере (production)
+
+> ⚠️ **Один рабочий процесс.** Игровые сессии хранятся в памяти процесса, поэтому
+> экран и его телефоны должны попадать в **один и тот же процесс**. Запускайте
+> **один воркер** uvicorn (без `--workers N` и без нескольких реплик за балансировщиком).
+> Для одного бара/экрана этого более чем достаточно: приложение асинхронное и по сети
+> гоняет лишь крошечные сообщения. Горизонтальное масштабирование потребовало бы
+> релея событий через Redis pub/sub.
+
+### Вариант A — Docker Compose + Caddy (рекомендуется, авто-HTTPS)
+
+Нужен сервер с Docker и (для HTTPS) доменом, указывающим A-записью на этот сервер.
+
+```bash
+cp .env.example .env
+# отредактируйте .env: DOMAIN=game.example.com  (или оставьте :80 для HTTP по IP)
+docker compose up -d --build
+```
+
+Caddy сам получит и продлит TLS-сертификат Let's Encrypt, будет проксировать
+WebSocket и передавать заголовки `Host` / `X-Forwarded-Proto`, из которых
+приложение строит правильную ссылку в QR-коде. Проверка: откройте `https://<домен>/`.
+
+Полезное:
+
+```bash
+docker compose logs -f            # логи
+docker compose up -d --build      # выкатить обновление
+docker compose down               # остановить
+```
+
+Отдельный образ (например, для PaaS/Kubernetes/Fly.io) собирается и запускается и без Compose:
+
+```bash
+docker build -t flappy-qr .
+docker run -d -p 8000:8000 -e PUBLIC_BASE_URL=https://game.example.com flappy-qr
+```
+
+### Вариант B — без Docker (systemd + Nginx)
+
+```bash
+sudo useradd --system --create-home --home-dir /opt/flappy flappy
+sudo cp -r . /opt/flappy && cd /opt/flappy
+sudo -u flappy python3 -m venv .venv
+sudo -u flappy ./.venv/bin/pip install -r requirements.txt
+
+sudo cp deploy/flappy.service /etc/systemd/system/
+sudo systemctl enable --now flappy          # приложение на 127.0.0.1:8000
+
+sudo cp deploy/nginx.conf /etc/nginx/sites-available/flappy
+sudo ln -s /etc/nginx/sites-available/flappy /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d game.example.com     # HTTPS
+```
+
+Nginx-конфиг (`deploy/nginx.conf`) уже содержит проброс WebSocket
+(`Upgrade`/`Connection`) и нужные `X-Forwarded-*`.
+
+### Вариант C — PaaS (Railway / Render / Heroku …)
+
+В репозитории есть `Procfile`. Платформа сама подставит `$PORT`; ссылки в QR
+берутся из входящего запроса (обычно уже `https://` вашего домена). Убедитесь, что
+приложение работает в **одном экземпляре** (scale = 1).
+
+### Переменные окружения
+
+| Переменная | По умолчанию | Назначение |
+|-----------|--------------|-----------|
+| `DOMAIN` | `:80` | (только Caddy/Compose) домен для авто-HTTPS; `:80` — HTTP по IP |
+| `PUBLIC_BASE_URL` | — | Жёстко задать базовый URL для QR, напр. `https://game.example.com`. Обычно не нужно — берётся из запроса |
+| `ALLOWED_HOSTS` | — | Список разрешённых `Host` через запятую (пусто = любой) |
+| `PORT` | `8000` | Порт uvicorn (Dockerfile/Procfile) |
+
+### Что важно за обратным прокси
+
+* Запускайте uvicorn с `--proxy-headers` (уже включено в Dockerfile/Procfile/юните),
+  чтобы схема и хост брались из `X-Forwarded-Proto` / `Host`, — иначе QR укажет на
+  внутренний адрес контейнера.
+* На HTTPS-сайте браузер сам использует `wss://` для WebSocket — прокси должен
+  пропускать апгрейд соединения (Caddy — автоматически, для Nginx это в конфиге).
+* Откройте на сервере порты **80/443** (файрвол/security group).
 
 ## Как это устроено
 

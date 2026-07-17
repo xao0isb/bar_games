@@ -1,0 +1,36 @@
+# Production stack: the app + Caddy as a reverse proxy with automatic HTTPS.
+#
+#   1. cp .env.example .env   and set DOMAIN (or leave :80 for HTTP-only)
+#   2. docker compose up -d --build
+#
+# Caddy terminates TLS, proxies WebSockets transparently, and forwards the
+# Host + X-Forwarded-Proto headers the app needs to build correct QR links.
+
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}
+    expose:
+      - "8000"          # internal only; reached via the caddy service
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

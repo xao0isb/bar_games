@@ -9,7 +9,15 @@
       "Bash(./.venv/bin/pip list *)",
       "Bash(./.venv/bin/python *)",
       "Bash(./.venv/bin/uvicorn main:app *)",
-      "Bash(pkill -f \"uvicorn main:app --host 127.0.0.1 --port 8123\")"
+      "Bash(pkill -f \"uvicorn main:app --host 127.0.0.1 --port 8123\")",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "Bash(./.venv/bin/pip freeze *)",
+      "Bash(docker build *)",
+      "Bash(docker port *)",
+      "Bash(curl -s --retry 10 --retry-delay 1 --retry-all-errors -o /dev/null -w \"health via 8125: %{http_code}\\\\n\" http://127.0.0.1:8125/health)",
+      "Bash(docker run *)",
+      "Bash(docker rmi *)"
     ]
   }
 }

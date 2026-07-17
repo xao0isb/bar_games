@@ -15,6 +15,7 @@ thin real-time relay between the controller(s) and the host screen of a session.
 from __future__ import annotations
 
 import json
+import os
 import uuid
 from dataclasses import dataclass, field
 from io import BytesIO
@@ -28,8 +29,26 @@ from fastapi.templating import Jinja2Templates
 
 app = FastAPI(title="Flappy Bird — QR Controller")
 
-templates = Jinja2Templates(directory="templates")
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# --------------------------------------------------------------------------- #
+# Deployment settings (environment-driven)
+# --------------------------------------------------------------------------- #
+# If set, the QR code / controller link use this exact public base URL, e.g.
+# "https://game.example.com". Otherwise the URL is derived from the incoming
+# request — correct behind a reverse proxy as long as it forwards the Host
+# header and X-Forwarded-Proto (run uvicorn with --proxy-headers).
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+
+# Optional comma-separated Host allow-list, e.g. "game.example.com,www.example.com".
+_ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
+if _ALLOWED_HOSTS:
+    from starlette.middleware.trustedhost import TrustedHostMiddleware
+
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=_ALLOWED_HOSTS)
+
+# Templates/static are resolved relative to this file so the app runs from any CWD.
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+templates = Jinja2Templates(directory=os.path.join(_BASE_DIR, "templates"))
+app.mount("/static", StaticFiles(directory=os.path.join(_BASE_DIR, "static")), name="static")
 
 
 # --------------------------------------------------------------------------- #
@@ -43,6 +62,9 @@ class GameSession:
     controllers: set[WebSocket] = field(default_factory=set)
 
 
+# NOTE: sessions live in this process's memory. A host screen and its
+# controllers must be served by the SAME process, so run a SINGLE worker
+# (see README). To scale horizontally you'd relay events through Redis/pub-sub.
 sessions: dict[str, GameSession] = {}
 
 
@@ -73,6 +95,18 @@ def make_qr_svg(data: str) -> str:
     return svg
 
 
+def controller_url_for(request: Request, session_id: str) -> str:
+    """Absolute URL of the controller page.
+
+    Prefers ``PUBLIC_BASE_URL`` when configured; otherwise derives it from the
+    request (scheme comes from X-Forwarded-Proto when uvicorn runs with
+    ``--proxy-headers``, host from the forwarded Host header).
+    """
+    if PUBLIC_BASE_URL:
+        return f"{PUBLIC_BASE_URL}/controller/{session_id}"
+    return str(request.url_for("controller_page", session_id=session_id))
+
+
 # --------------------------------------------------------------------------- #
 # HTTP routes
 # --------------------------------------------------------------------------- #
@@ -90,7 +124,7 @@ async def index(request: Request, s: str | None = None):
             url=str(request.url.include_query_params(s=new_id))
         )
 
-    controller_url = str(request.url_for("controller_page", session_id=session_id))
+    controller_url = controller_url_for(request, session_id)
     return templates.TemplateResponse(
         request,
         "index.html",

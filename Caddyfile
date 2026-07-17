@@ -1,0 +1,9 @@
+# DOMAIN comes from the environment (see .env).
+#   - a real hostname (game.example.com) -> automatic Let's Encrypt HTTPS
+#   - ":80"                               -> plain HTTP (access by IP, no cert)
+# reverse_proxy handles WebSocket upgrades automatically and forwards the
+# Host / X-Forwarded-* headers the app relies on.
+{$DOMAIN} {
+	encode zstd gzip
+	reverse_proxy app:8000
+}
