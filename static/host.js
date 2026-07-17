@@ -1,7 +1,7 @@
-/* Flappy Beer — runs on the big screen. The flying character is the player's
-   own photo (sent from their phone). Obstacles are drinks: beer glasses, soju
-   bottles and shot-glass stacks. Physics/rendering happen here; the phone just
-   sends "flap" (and once, the player's name + photo). */
+/* Flappy Beer — big-screen game, rendered as old-school pixel art. The canvas
+   backing store is a tiny 144x192; CSS upscales it with nearest-neighbour, so
+   everything (sprites, the player's photo, text) comes out chunky and retro.
+   The flying character is the player's own photo (sent from their phone). */
 (() => {
   "use strict";
 
@@ -10,24 +10,32 @@
   const qrPanel = document.getElementById("qr-panel");
   const overlay = document.getElementById("overlay");
 
-  // Logical game size (rendered crisp via devicePixelRatio, scaled by CSS).
-  const W = 480, H = 640;
-  const DPR = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
-  canvas.width = W * DPR;
-  canvas.height = H * DPR;
-  ctx.scale(DPR, DPR);
+  // Low-res pixel buffer (0.75 aspect, matches the 480x640 stage). CSS scales up.
+  const W = 144, H = 192;
+  canvas.width = W;
+  canvas.height = H;
+  ctx.imageSmoothingEnabled = false;
 
-  // ---- tunables ----
-  const GRAVITY = 1500;      // px/s^2
-  const FLAP_V = -470;       // px/s impulse
-  const SPEED = 170;         // px/s obstacle scroll
-  const OBST_W = 74;         // collision/visual width of a drink column
-  const GAP = 180;           // vertical gap the player flies through
-  const SPACING = 250;       // horizontal distance between drinks
-  const GROUND_H = 96;
-  const PLAYER_X = 130;
-  const PLAYER_R = 20;
+  // ---- tunables (world runs in the 144x192 pixel space) ----
+  const GRAVITY = 450;
+  const FLAP_V = -141;
+  const SPEED = 51;
+  const OBST_W = 22;
+  const GAP = 56;
+  const SPACING = 75;
+  const GROUND_H = 28;
+  const PLAYER_X = 40;
+  const PLAYER_R = 7;
   const DRINKS = ["beer", "soju", "shot"];
+
+  const COL = {
+    sky: "#4ec0ca", cloud: "#ffffff", outline: "#20160c",
+    beer: "#ffb43f", beerHi: "#ffd889", beerSh: "#e2902a", foam: "#fff6e6",
+    soju: "#37b06a", sojuHi: "#69d998", sojuSh: "#238a4f", label: "#f2f2ea", cap: "#cfd6d8",
+    glass: "#bfe0ff", glassHi: "#ffffff", shot: "#e79a2a",
+    wood: "#9a6535", woodDark: "#6e4522", woodTop: "#b98a55",
+    hud: "#ffffff", hudSh: "#20160c",
+  };
 
   // ---- state ----
   let state = "waiting";     // waiting | lobby | ready | playing | gameover
@@ -39,7 +47,7 @@
   let leaveTimer = null;
 
   function reset() {
-    hero = { y: H / 2, vy: 0, angle: 0 };
+    hero = { y: H / 2, vy: 0 };
     drinks = [];
     score = 0;
   }
@@ -79,7 +87,7 @@
         if (typeof msg.photo === "string" && msg.photo.startsWith("data:image/")) {
           player.photo = msg.photo;
           const im = new Image();
-          im.onload = () => { player.img = im; };
+          im.onload = () => { player.img = pixelate(im, PLAYER_R * 2); };
           im.src = msg.photo;
         }
         if (state === "waiting" || state === "lobby") setState("ready");
@@ -91,7 +99,6 @@
         else sendState();
         break;
       case "controller_left":
-        // Tolerate brief mobile drops; only reset to the QR if truly abandoned.
         clearTimeout(leaveTimer);
         leaveTimer = setTimeout(() => {
           player = { name: "", photo: null, img: null };
@@ -99,6 +106,16 @@
         }, 3000);
         break;
     }
+  }
+
+  // Pre-shrink the photo to a tiny square once, so it draws crisp & blocky.
+  function pixelate(image, d) {
+    const oc = document.createElement("canvas");
+    oc.width = oc.height = d;
+    const ox = oc.getContext("2d");
+    ox.imageSmoothingEnabled = true; // quality downsample to d x d
+    ox.drawImage(image, 0, 0, d, d);
+    return oc;
   }
 
   // ---------------------------- game control ---------------------------- //
@@ -121,20 +138,19 @@
     } else if (state === "gameover") {
       setState("ready");
     }
-    // waiting / lobby: ignore.
   }
 
   function spawnDrink() {
-    const margin = 60;
+    const margin = 16;
     const minY = margin + GAP / 2;
     const maxY = H - GROUND_H - margin - GAP / 2;
-    const gapY = minY + Math.random() * (maxY - minY);
+    const gapY = Math.round(minY + Math.random() * (maxY - minY));
     const kind = DRINKS[Math.floor(Math.random() * DRINKS.length)];
     drinks.push({ x: W, gapY, kind, passed: false });
   }
 
   function collides() {
-    if (hero.y + PLAYER_R >= H - GROUND_H) return true; // floor = death
+    if (hero.y + PLAYER_R >= H - GROUND_H) return true;
     for (const d of drinks) {
       if (PLAYER_X + PLAYER_R > d.x && PLAYER_X - PLAYER_R < d.x + OBST_W) {
         const topH = d.gapY - GAP / 2;
@@ -149,16 +165,14 @@
     if (state !== "gameover") groundX -= SPEED * dt;
 
     if (state === "ready" || state === "waiting" || state === "lobby") {
-      hero.y = H / 2 + Math.sin(now / 220) * 10; // gentle idle bob
-      hero.angle = Math.sin(now / 220) * 0.12;
+      hero.y = H / 2 + Math.sin(now / 220) * 3; // idle bob
       return;
     }
 
     if (state === "playing") {
       hero.vy += GRAVITY * dt;
       hero.y += hero.vy * dt;
-      if (hero.y < PLAYER_R) { hero.y = PLAYER_R; hero.vy = 0; } // bonk ceiling
-      hero.angle = Math.max(-0.5, Math.min(1.4, hero.vy / 450 + 0.15));
+      if (hero.y < PLAYER_R) { hero.y = PLAYER_R; hero.vy = 0; }
 
       if (drinks.length === 0 || drinks[drinks.length - 1].x <= W - SPACING) {
         spawnDrink();
@@ -171,7 +185,7 @@
           sendState();
         }
       }
-      drinks = drinks.filter((d) => d.x + OBST_W > -20);
+      drinks = drinks.filter((d) => d.x + OBST_W > -6);
 
       if (collides()) {
         best = Math.max(best, score);
@@ -181,247 +195,141 @@
     }
   }
 
-  // ------------------------------ rendering ------------------------------ //
-  function rr(x, y, w, h, r) {
-    r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
+  // ------------------------------ pixel rendering ------------------------------ //
+  function mod(a, n) { return ((a % n) + n) % n; }
+  function px(x, y, w, h, color) {
+    ctx.fillStyle = color;
+    ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
   }
 
   function drawBackground() {
-    const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, "#4ec0ca");
-    g.addColorStop(1, "#8fd9c0");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
-
-    ctx.fillStyle = "rgba(255,255,255,.35)";
+    px(0, 0, W, H, COL.sky);
     for (let i = 0; i < 3; i++) {
-      const cx = ((i * 190 + groundX * 0.3) % (W + 140) + (W + 140)) % (W + 140) - 70;
-      cloud(cx, 90 + i * 46, 30 + i * 6);
+      const cx = mod(i * 58 + groundX * 0.3, W + 44) - 24;
+      pixelCloud(cx, 20 + i * 15);
     }
   }
-  function cloud(x, y, r) {
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.arc(x + r, y + 6, r * 0.8, 0, Math.PI * 2);
-    ctx.arc(x - r, y + 8, r * 0.7, 0, Math.PI * 2);
-    ctx.fill();
+  function pixelCloud(x, y) {
+    px(x, y, 20, 6, COL.cloud);
+    px(x + 5, y - 4, 11, 5, COL.cloud);
+    px(x - 3, y + 3, 26, 5, COL.cloud);
   }
 
   function drawObstacle(d) {
     const topH = d.gapY - GAP / 2;
     const botY = d.gapY + GAP / 2;
     const groundTop = H - GROUND_H;
-    drawDrinkPiece(d.x, botY, groundTop, d.kind);  // bottom: rim faces up into gap
-    drawDrinkPiece(d.x, topH, 0, d.kind);          // top: rim faces down into gap
+    drawDrinkPiece(d.x, botY, groundTop, d.kind);
+    drawDrinkPiece(d.x, topH, 0, d.kind);
   }
   function drawDrinkPiece(x, rimY, baseY, kind) {
     const len = Math.abs(baseY - rimY);
-    if (len <= 1) return;
+    if (len <= 0) return;
     const dir = baseY >= rimY ? 1 : -1;
     ctx.save();
-    ctx.translate(x, rimY);
-    ctx.scale(1, dir);          // local +y goes from rim toward the screen edge
-    if (kind === "beer") drawBeer(len);
-    else if (kind === "soju") drawSoju(len);
-    else drawShotStack(len);
+    ctx.translate(Math.round(x), Math.round(rimY));
+    ctx.scale(1, dir);
+    if (kind === "beer") drinkBeer(len);
+    else if (kind === "soju") drinkSoju(len);
+    else drinkShot(len);
     ctx.restore();
   }
 
-  const W_ = OBST_W;
-
-  function drawBeer(len) {
-    const g = ctx.createLinearGradient(0, 0, W_, 0);
-    g.addColorStop(0, "#d98407");
-    g.addColorStop(0.45, "#ffc63d");
-    g.addColorStop(1, "#d17e05");
-    ctx.fillStyle = g;
-    rr(3, 12, W_ - 6, len - 12, 10);
-    ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "rgba(120,70,0,.45)";
-    ctx.stroke();
-    ctx.fillStyle = "rgba(255,255,255,.28)";
-    for (let i = 0; i < 5; i++) {
-      const by = 40 + ((i * 57) % Math.max(1, len - 60));
-      ctx.beginPath();
-      ctx.arc(18 + (i % 3) * 18, by, 2.4, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = "rgba(255,255,255,.4)";
-    rr(10, 20, 7, Math.max(1, len - 34), 4);
-    ctx.fill();
-    ctx.fillStyle = "#fff7ec";
-    rr(0, 0, W_, 22, 9);
-    ctx.fill();
-    ctx.beginPath();
-    for (let i = 0; i <= 5; i++) ctx.arc(4 + i * 14, 22, 8, 0, Math.PI * 2);
-    ctx.fill();
+  function drinkBeer(len) {
+    px(0, 0, OBST_W, len, COL.beer);
+    px(0, 0, 4, len, COL.beerHi);
+    px(OBST_W - 4, 0, 4, len, COL.beerSh);
+    px(0, 0, OBST_W, 6, COL.foam);          // foam head at rim
+    px(2, 6, 3, 2, COL.foam);
+    px(9, 6, 4, 2, COL.foam);
+    px(16, 6, 3, 2, COL.foam);
+    px(0, 0, 1, len, COL.outline);
+    px(OBST_W - 1, 0, 1, len, COL.outline);
+    px(0, len - 1, OBST_W, 1, COL.outline);
   }
 
-  function drawSoju(len) {
-    const capH = 12, neckH = 22, shoulderH = 20, neckW = 26;
-    const nx = (W_ - neckW) / 2;
-    const bodyTop = capH + neckH + shoulderH;
-    const g = ctx.createLinearGradient(0, 0, W_, 0);
-    g.addColorStop(0, "#2b7a46");
-    g.addColorStop(0.45, "#5ec585");
-    g.addColorStop(1, "#256b3d");
-    ctx.fillStyle = g;
-    rr(3, bodyTop, W_ - 6, len - bodyTop, 10);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(nx, capH + neckH);
-    ctx.lineTo(nx + neckW, capH + neckH);
-    ctx.lineTo(W_ - 5, bodyTop + 4);
-    ctx.lineTo(5, bodyTop + 4);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = "#2f8a4f";
-    ctx.fillRect(nx, capH, neckW, neckH + 2);
-    ctx.fillStyle = "#d7dde0";
-    rr(nx - 1, 0, neckW + 2, capH + 2, 3);
-    ctx.fill();
-    ctx.fillStyle = "#f4f6f2";
-    const ly = bodyTop + (len - bodyTop) * 0.32;
-    rr(8, ly, W_ - 16, Math.min(64, (len - bodyTop) * 0.42), 6);
-    ctx.fill();
-    ctx.fillStyle = "#3a9d5d";
-    for (let i = 0; i < 3; i++) {
-      ctx.fillRect(14, ly + 10 + i * 12, W_ - 28 - (i === 2 ? 18 : 0), 4);
+  function drinkSoju(len) {
+    if (len < 20) {
+      px(0, 0, OBST_W, len, COL.soju);
+      px(0, 0, 1, len, COL.outline);
+      px(OBST_W - 1, 0, 1, len, COL.outline);
+      return;
     }
-    ctx.fillStyle = "rgba(255,255,255,.3)";
-    rr(9, bodyTop + 6, 6, Math.max(1, len - bodyTop - 14), 3);
-    ctx.fill();
+    const cap = 3, neck = 6, shoulder = 4, bodyTop = cap + neck + shoulder;
+    px(0, bodyTop, OBST_W, len - bodyTop, COL.soju);
+    px(0, bodyTop, 4, len - bodyTop, COL.sojuHi);
+    px(OBST_W - 4, bodyTop, 4, len - bodyTop, COL.sojuSh);
+    px(4, bodyTop - 2, OBST_W - 8, 2, COL.soju);   // shoulder step
+    px(8, cap, 6, neck, COL.soju);                 // neck
+    px(8, 0, 6, cap, COL.cap);                     // cap
+    const lh = Math.min(14, Math.floor((len - bodyTop) * 0.45));
+    px(2, bodyTop + Math.floor((len - bodyTop) * 0.3), OBST_W - 4, lh, COL.label);
+    px(0, bodyTop, 1, len - bodyTop, COL.outline);
+    px(OBST_W - 1, bodyTop, 1, len - bodyTop, COL.outline);
+    px(0, len - 1, OBST_W, 1, COL.outline);
   }
 
-  function drawShotStack(len) {
-    const n = Math.max(1, Math.round(len / 50));
+  function drinkShot(len) {
+    const n = Math.max(1, Math.round(len / 14));
     const h = len / n;
-    for (let i = 0; i < n; i++) shotGlass(i * h, h);
-  }
-  function shotGlass(y, h) {
-    const topIn = 4, botIn = 11;
-    ctx.beginPath();
-    ctx.moveTo(topIn, y + 2);
-    ctx.lineTo(W_ - topIn, y + 2);
-    ctx.lineTo(W_ - botIn, y + h - 1);
-    ctx.lineTo(botIn, y + h - 1);
-    ctx.closePath();
-    ctx.fillStyle = "rgba(216,236,255,.5)";
-    ctx.fill();
-    ctx.save();
-    ctx.clip();
-    ctx.fillStyle = "#e79a2a";
-    ctx.fillRect(0, y + h * 0.46, W_, h);
-    ctx.fillStyle = "rgba(255,255,255,.25)";
-    ctx.fillRect(0, y + h * 0.46, W_, 3);
-    ctx.restore();
-    ctx.lineWidth = 2.5;
-    ctx.strokeStyle = "rgba(255,255,255,.75)";
-    ctx.beginPath();
-    ctx.moveTo(topIn, y + 2);
-    ctx.lineTo(W_ - topIn, y + 2);
-    ctx.lineTo(W_ - botIn, y + h - 1);
-    ctx.lineTo(botIn, y + h - 1);
-    ctx.closePath();
-    ctx.stroke();
-    ctx.strokeStyle = "rgba(255,255,255,.95)";
-    ctx.lineWidth = 3.5;
-    ctx.beginPath();
-    ctx.moveTo(topIn, y + 2.5);
-    ctx.lineTo(W_ - topIn, y + 2.5);
-    ctx.stroke();
+    for (let i = 0; i < n; i++) {
+      const y = i * h;
+      px(1, y, OBST_W - 2, h - 1, COL.glass);
+      const lq = Math.max(2, Math.floor(h * 0.45));
+      px(1, y + h - 1 - lq, OBST_W - 2, lq, COL.shot);
+      px(1, y, OBST_W - 2, 2, COL.glassHi);
+      px(0, y, 1, h, COL.outline);
+      px(OBST_W - 1, y, 1, h, COL.outline);
+      px(0, y + h - 1, OBST_W, 1, COL.outline);
+    }
   }
 
   function drawGround() {
     const y = H - GROUND_H;
-    ctx.fillStyle = "#5c3a1c";
-    ctx.fillRect(0, y, W, 10);
-    const g = ctx.createLinearGradient(0, y, 0, H);
-    g.addColorStop(0, "#9a6535");
-    g.addColorStop(1, "#6e4522");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, y + 10, W, GROUND_H - 10);
-    ctx.fillStyle = "rgba(255,224,176,.18)";
-    ctx.fillRect(0, y + 10, W, 5);
-    ctx.strokeStyle = "rgba(58,34,14,.5)";
-    ctx.lineWidth = 2;
-    const tile = 60;
-    const off = ((groundX % tile) + tile) % tile;
+    px(0, y, W, 2, COL.outline);
+    px(0, y + 2, W, 2, COL.woodTop);
+    px(0, y + 4, W, GROUND_H - 4, COL.wood);
+    const tile = 16;
+    const off = mod(groundX, tile);
     for (let x = -tile; x < W + tile; x += tile) {
-      const px = x + off;
-      ctx.beginPath();
-      ctx.moveTo(px, y + 10);
-      ctx.lineTo(px, H);
-      ctx.stroke();
+      px(x + off, y + 4, 1, GROUND_H - 4, COL.woodDark);
     }
   }
 
-  // The flying character: the player's photo, clipped to a circle with a beer-gold
-  // ring. Falls back to a golden disc with the name's initial until the photo loads.
+  // The player's photo as a framed pixel portrait (square = retro).
   function drawPlayer() {
     const R = PLAYER_R;
-    ctx.save();
-    ctx.translate(PLAYER_X, hero.y);
-    ctx.rotate(hero.angle * 0.6);
-
-    ctx.beginPath();
-    ctx.arc(0, 0, R + 3, 0, Math.PI * 2);
-    ctx.fillStyle = "#f0a400";
-    ctx.fill();
-
+    const d = R * 2;
+    const x = Math.round(PLAYER_X - R);
+    const y = Math.round(hero.y - R);
+    px(x - 2, y - 2, d + 4, d + 4, COL.outline);
+    px(x - 1, y - 1, d + 2, d + 2, COL.foam);
     if (player.img) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(0, 0, R, 0, Math.PI * 2);
-      ctx.clip();
-      ctx.drawImage(player.img, -R, -R, R * 2, R * 2);
-      ctx.restore();
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(player.img, x, y, d, d);
     } else {
-      ctx.beginPath();
-      ctx.arc(0, 0, R, 0, Math.PI * 2);
-      ctx.fillStyle = "#ffca4a";
-      ctx.fill();
-      ctx.fillStyle = "#7a4e00";
-      ctx.font = `800 ${Math.round(R * 1.1)}px -apple-system, "Segoe UI", Roboto, sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText((player.name || "?").slice(0, 1).toUpperCase(), 0, 1);
+      px(x, y, d, d, COL.beer);
+      px(x + 3, y + 4, 2, 2, COL.outline);
+      px(x + d - 5, y + 4, 2, 2, COL.outline);
+      px(x + 4, y + d - 4, d - 8, 1, COL.outline);
     }
-
-    ctx.beginPath();
-    ctx.arc(0, 0, R, 0, Math.PI * 2);
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "#fff";
-    ctx.stroke();
-    ctx.restore();
   }
 
+  function hudText(str, x, y, size, align) {
+    ctx.font = `bold ${size}px "Courier New", ui-monospace, monospace`;
+    ctx.textAlign = align || "center";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = COL.hudSh;
+    ctx.fillText(str, x + 1, y + 1);
+    ctx.fillStyle = COL.hud;
+    ctx.fillText(str, x, y);
+  }
   function drawHud() {
     if (state !== "playing" && state !== "gameover") return;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "alphabetic";
-    ctx.font = '800 56px -apple-system, "Segoe UI", Roboto, sans-serif';
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = "rgba(0,0,0,.45)";
-    ctx.fillStyle = "#fff";
-    ctx.strokeText(String(score), W / 2, 92);
-    ctx.fillText(String(score), W / 2, 92);
+    hudText(String(score), W / 2, 6, 18);
     if (player.name) {
-      const nm = player.name.length > 18 ? player.name.slice(0, 18) + "…" : player.name;
-      ctx.font = '700 20px -apple-system, "Segoe UI", Roboto, sans-serif';
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = "rgba(0,0,0,.4)";
-      ctx.strokeText(nm, W / 2, 120);
-      ctx.fillStyle = "#fff";
-      ctx.fillText(nm, W / 2, 120);
+      const nm = player.name.length > 12 ? player.name.slice(0, 12) : player.name;
+      hudText(nm, W / 2, 26, 8);
     }
   }
 
@@ -433,7 +341,7 @@
     drawHud();
   }
 
-  // ---------------------------- overlay text ---------------------------- //
+  // ---------------------------- overlay text (DOM) ---------------------------- //
   function esc(s) {
     return String(s).replace(/[&<>"']/g, (c) =>
       ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -441,7 +349,6 @@
   function avatarHtml() {
     return player.photo ? `<img class="ov-avatar" src="${player.photo}" alt="">` : "";
   }
-
   function updateOverlay() {
     if (state === "lobby") {
       overlay.style.display = "flex";
@@ -475,7 +382,7 @@
     if (!last) last = t;
     let dt = (t - last) / 1000;
     last = t;
-    if (dt > 0.05) dt = 0.05; // clamp after tab was backgrounded
+    if (dt > 0.05) dt = 0.05;
     update(dt);
     render();
     requestAnimationFrame(loop);
