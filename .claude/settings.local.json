@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m pip --version)",
+      "Bash(python3 -c \"import socket; s=socket.create_connection\\(\\('pypi.org',443\\),3\\); print\\('internet OK'\\); s.close\\(\\)\")",
+      "Bash(chmod +x run.sh)",
+      "Bash(python3 -m venv .venv)",
+      "Bash(./.venv/bin/pip install *)",
+      "Bash(./.venv/bin/pip list *)",
+      "Bash(./.venv/bin/python *)",
+      "Bash(./.venv/bin/uvicorn main:app *)",
+      "Bash(pkill -f \"uvicorn main:app --host 127.0.0.1 --port 8123\")"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Flappy — Пульт</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="controller">
+  <div id="status" class="status">Подключение…</div>
+
+  <button id="flap-btn" type="button">
+    <span id="btn-label">ПРЫЖОК</span>
+    <span class="score-wrap">Счёт:&nbsp;<span id="score">0</span></span>
+  </button>
+
+  <div class="hint">Нажимайте, чтобы птичка прыгала</div>
+
+  <script>const SESSION_ID = "{{ session_id }}";</script>
+  <script src="/static/controller.js"></script>
+</body>
+</html>
