@@ -793,6 +793,7 @@
     ).join("");
     return (
       '<div class="overlay-card leaderboard">' +
+      '<div class="season-banner">Сезон заканчивается<br><b>в следующее воскресенье</b></div>' +
       "<h1>Таблица лидеров</h1>" +
       '<p class="lb-sub">Ваш результат: <b>' + bestOfRun + "</b> — вы почти в топ-10!</p>" +
       '<div class="lb">' + rows + "</div>" +
