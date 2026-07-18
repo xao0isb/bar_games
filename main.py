@@ -27,6 +27,7 @@ from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
 app = FastAPI(title="Flappy Beer — QR Controller")
 
@@ -67,6 +68,17 @@ class GameSession:
 # controllers must be served by the SAME process, so run a SINGLE worker
 # (see README). To scale horizontally you'd relay events through Redis/pub-sub.
 sessions: dict[str, GameSession] = {}
+
+
+# Operator-controlled game mode, flipped from the /admin page. Global on purpose:
+# this is a single-screen demo, so one switch drives whatever screen(s) connect.
+#   single_play == False -> 3-play demo that ends on a (flattering) leaderboard
+#   single_play == True  -> one play that ends on "you lost", no leaderboard
+GAME_SETTINGS = {"single_play": False}
+
+
+class ModeIn(BaseModel):
+    single: bool
 
 
 def get_or_create(session_id: str) -> GameSession:
@@ -152,6 +164,29 @@ async def controller_page(request: Request, session_id: str):
 
 
 # --------------------------------------------------------------------------- #
+# Operator control panel (open /admin on your phone)
+# --------------------------------------------------------------------------- #
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page(request: Request):
+    """Operator panel: a single switch to flip demo/normal mode."""
+    return templates.TemplateResponse(request, "admin.html", {})
+
+
+@app.get("/api/mode")
+async def get_mode():
+    return {"single": GAME_SETTINGS["single_play"]}
+
+
+@app.post("/api/mode")
+async def set_mode(body: ModeIn):
+    """Flip the mode, then tell every screen to switch and restart the game."""
+    GAME_SETTINGS["single_play"] = bool(body.single)
+    await broadcast_to_hosts({"type": "mode", "single": GAME_SETTINGS["single_play"]})
+    await broadcast_to_hosts({"type": "reset"})
+    return {"single": GAME_SETTINGS["single_play"]}
+
+
+# --------------------------------------------------------------------------- #
 # WebSocket relay
 # --------------------------------------------------------------------------- #
 async def send_safe(ws: WebSocket | None, msg: dict) -> None:
@@ -161,6 +196,12 @@ async def send_safe(ws: WebSocket | None, msg: dict) -> None:
         await ws.send_text(json.dumps(msg))
     except Exception:
         pass
+
+
+async def broadcast_to_hosts(msg: dict) -> None:
+    """Push a message to every connected host screen (used by /api/mode)."""
+    for session in list(sessions.values()):
+        await send_safe(session.host, msg)
 
 
 async def broadcast_to_controllers(session: GameSession, msg: dict) -> None:
@@ -184,6 +225,8 @@ async def ws_endpoint(websocket: WebSocket, session_id: str, role: str):
 
     if role == "host":
         session.host = websocket
+        # Tell the freshly-connected screen the current operator mode.
+        await send_safe(websocket, {"type": "mode", "single": GAME_SETTINGS["single_play"]})
         await broadcast_to_controllers(session, {"type": "host_status", "connected": True})
         # If a phone is already waiting, let the freshly-(re)connected screen know.
         if session.controllers:

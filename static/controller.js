@@ -17,6 +17,7 @@
   const labelEl = $("btn-label");
   const scoreEl = $("score");
   const btn = $("flap-btn");
+  const hintEl = document.querySelector(".control .hint");
 
   let ws = null;
   let hostConnected = false;
@@ -24,6 +25,9 @@
   let photoData = null;   // compressed data URL of the chosen photo
   let player = null;      // { name, photo } once the player has started
   let joined = false;
+  let singlePlay = false; // demo (3 plays + leaderboard) vs single play
+  let playsDone = 0;      // plays finished in the current run
+  let playsTotal = 3;
 
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const wsUrl = `${proto}//${location.host}/ws/${SESSION_ID}/controller`;
@@ -41,6 +45,9 @@
       if (m.type === "state") {
         gameState = m.state;
         if (typeof m.score === "number") scoreEl.textContent = m.score;
+        if (typeof m.single === "boolean") singlePlay = m.single;
+        if (typeof m.plays === "number") playsDone = m.plays;
+        if (typeof m.total === "number") playsTotal = m.total;
         updateLabel();
       } else if (m.type === "host_status") {
         hostConnected = !!m.connected;
@@ -135,14 +142,38 @@
   });
   window.addEventListener("contextmenu", (e) => e.preventDefault());
 
+  function setHint(t) { if (hintEl) hintEl.textContent = t; }
+
   function updateLabel() {
     if (!joined) return;
-    if (!hostConnected) { labelEl.textContent = "Ждём экран"; return; }
+    if (!hostConnected) { labelEl.textContent = "Ждём экран"; setHint("Ждём большой экран…"); return; }
+    const nextPlay = Math.min(playsDone + 1, playsTotal);
     switch (gameState) {
-      case "ready": labelEl.textContent = "СТАРТ"; break;
-      case "playing": labelEl.textContent = "ПРЫЖОК"; break;
-      case "gameover": labelEl.textContent = "ЗАНОВО"; break;
-      default: labelEl.textContent = "ПРЫЖОК";
+      case "ready":
+        labelEl.textContent = "СТАРТ";
+        setHint(singlePlay
+          ? "Нажмите, чтобы взлететь"
+          : "Игра " + nextPlay + " из " + playsTotal + " — нажмите, чтобы взлететь");
+        break;
+      case "playing":
+        labelEl.textContent = "ПРЫЖОК";
+        setHint("Нажимайте, чтобы прыгать");
+        break;
+      case "gameover":
+        labelEl.textContent = "ДАЛЬШЕ";
+        setHint("Сыграно " + playsDone + " из " + playsTotal + " — нажмите, чтобы продолжить");
+        break;
+      case "leaderboard":
+        labelEl.textContent = "ЗАНОВО";
+        setHint("Смотрите таблицу лидеров на экране!");
+        break;
+      case "lost":
+        labelEl.textContent = "ЗАНОВО";
+        setHint("Вы проиграли — нажмите, чтобы попробовать снова");
+        break;
+      default:
+        labelEl.textContent = "ПРЫЖОК";
+        setHint("Нажимайте, чтобы прыгать");
     }
   }
 

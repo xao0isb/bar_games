@@ -1,9 +1,14 @@
 /* Flappy Beer — big-screen game, rendered crisp instead of pixelated. The world
    simulation runs in a small 144x192 space (so physics/tuning are unchanged), but
    the canvas backing store is sized to the display and the drawing context is
-   scaled up by an integer factor S. That means the player's photo, the HUD text
-   and the drink obstacles all come out smooth. The flying character is the
-   player's own photo (sent from their phone). */
+   scaled to match. That means the player's photo, the HUD text and the drink
+   obstacles all come out smooth. The flying character is the player's own photo
+   (sent from their phone).
+
+   Two demo flows, switched from the operator page (/admin):
+   • demo  (default): 3 plays, then a leaderboard where the player's best lands at
+     #12, just below 11 bots scoring slightly higher — "so close to the top 10".
+   • single: one play that ends on "Вы проиграли", no leaderboard. */
 (() => {
   "use strict";
 
@@ -63,18 +68,31 @@
   };
 
   // ---- state ----
-  let state = "waiting";     // waiting | lobby | ready | playing | gameover
+  const PLAYS_PER_RUN = 3;
+  let state = "waiting";     // waiting | lobby | ready | playing | gameover | leaderboard | lost
   let score = 0;
   let best = Number(localStorage.getItem("flappybeer_best") || 0);
   let hero, drinks, groundX = 0;
   let now = 0;
   let player = { name: "", photo: null, img: null };
   let leaveTimer = null;
+  let singlePlay = false;    // false = 3-play demo + leaderboard; true = 1 play + "you lost"
+  let plays = 0;             // plays finished in the current run
+  let bestOfRun = 0;         // best score across the current run
+  let hasController = false; // is a phone connected right now?
+  let leaderboard = null;    // rows, built when we enter the "leaderboard" state
 
   function reset() {
     hero = { y: H / 2, vy: 0 };
     drinks = [];
     score = 0;
+  }
+  // A "run" is one demo session (up to PLAYS_PER_RUN plays).
+  function startRun() {
+    plays = 0;
+    bestOfRun = 0;
+    leaderboard = null;
+    reset();
   }
   reset();
 
@@ -99,7 +117,12 @@
   function send(obj) {
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
   }
-  function sendState() { send({ type: "state", state, score, best, name: player.name }); }
+  function sendState() {
+    send({
+      type: "state", state, score, best, name: player.name,
+      single: singlePlay, plays, total: PLAYS_PER_RUN,
+    });
+  }
 
   function handleMessage(msg) {
     switch (msg.type) {
@@ -115,20 +138,33 @@
           im.onload = () => { player.img = im; };   // keep it full-res -> crisp
           im.src = msg.photo;
         }
-        if (state === "waiting" || state === "lobby") setState("ready");
+        if (state === "waiting" || state === "lobby") { startRun(); setState("ready"); }
         else { updateOverlay(); sendState(); }
         break;
       case "controller_joined":
         clearTimeout(leaveTimer);
+        hasController = true;
         if (state === "waiting") setState("lobby");
         else sendState();
         break;
       case "controller_left":
         clearTimeout(leaveTimer);
+        hasController = false;
         leaveTimer = setTimeout(() => {
           player = { name: "", photo: null, img: null };
+          startRun();
           setState("waiting");
         }, 3000);
+        break;
+      case "mode":                       // operator's /admin page switched the mode
+        singlePlay = !!msg.single;
+        break;
+      case "reset":                      // operator restarted the game
+        clearTimeout(leaveTimer);
+        startRun();
+        if (player.name || player.photo) setState("ready");
+        else if (hasController) setState("lobby");
+        else setState("waiting");
         break;
     }
   }
@@ -136,8 +172,17 @@
   // ---------------------------- game control ---------------------------- //
   function setState(s) {
     state = s;
-    if (s === "ready") reset();
     qrPanel.style.display = s === "waiting" ? "flex" : "none";
+    updateOverlay();
+    sendState();
+  }
+
+  // Begin a play (from ready/gameover/lost) with the opening flap.
+  function startPlaying() {
+    reset();
+    state = "playing";
+    hero.vy = FLAP_V;
+    qrPanel.style.display = "none";
     updateOverlay();
     sendState();
   }
@@ -150,9 +195,56 @@
       sendState();
     } else if (state === "playing") {
       hero.vy = FLAP_V;
-    } else if (state === "gameover") {
+    } else if (state === "gameover") {   // demo: on to the next of the 3 plays
+      startPlaying();
+    } else if (state === "lost") {       // single mode: try again (still one life)
+      startPlaying();
+    } else if (state === "leaderboard") {  // demo finished: start a brand-new run
+      startRun();
       setState("ready");
     }
+  }
+
+  // Called when a play ends (the avatar crashed).
+  function endPlay() {
+    plays += 1;
+    bestOfRun = Math.max(bestOfRun, score);
+    if (singlePlay) {
+      setState("lost");
+    } else if (plays >= PLAYS_PER_RUN) {
+      leaderboard = buildLeaderboard(bestOfRun);
+      setState("leaderboard");
+    } else {
+      setState("gameover");
+    }
+  }
+
+  // ---- fake leaderboard (demo): the player lands at #12, just shy of the top 10 ----
+  const LB_NAMES = [
+    "Максим", "Софи", "Дмитрий", "Алина", "Иван", "Настя", "Олег", "Юля",
+    "Минхо", "Джису", "Хёну", "Лена", "Артём", "Вика", "Пабло", "Даша",
+    "Рома", "Соня", "Женя", "Тимур", "Марк", "Катя",
+  ];
+  function shuffled(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+  function buildLeaderboard(playerScore) {
+    const names = shuffled(LB_NAMES).slice(0, 11);
+    let s = playerScore + 1 + Math.floor(Math.random() * 2);
+    const scores = [];
+    for (let i = 0; i < 11; i++) {         // 11 bots, tightly clustered just above
+      scores.push(s);
+      s += 1 + Math.floor(Math.random() * 2);
+    }
+    scores.reverse();                       // #1 highest ... #11 just above the player
+    const rows = names.map((name, i) => ({ rank: i + 1, name, score: scores[i], me: false }));
+    rows.push({ rank: 12, name: player.name || "Вы", score: playerScore, me: true });
+    return rows;
   }
 
   function spawnDrink() {
@@ -206,7 +298,7 @@
       if (collides()) {
         best = Math.max(best, score);
         localStorage.setItem("flappybeer_best", String(best));
-        setState("gameover");
+        endPlay();
       }
     }
   }
@@ -565,22 +657,51 @@
         "<p>Введите имя и добавьте фото на телефоне</p></div>";
     } else if (state === "ready") {
       overlay.style.display = "flex";
+      const badge = singlePlay
+        ? ""
+        : '<p class="who">Игра ' + (plays + 1) + " из " + PLAYS_PER_RUN + "</p>";
       overlay.innerHTML =
-        '<div class="overlay-card">' + avatarHtml() +
+        '<div class="overlay-card">' + avatarHtml() + badge +
         "<h1>" + (esc(player.name) || "Готовы") + ", вперёд!</h1>" +
         "<p>Нажмите кнопку на телефоне,<br>чтобы взлететь</p></div>";
-    } else if (state === "gameover") {
+    } else if (state === "gameover") {           // between the 3 demo plays
       overlay.style.display = "flex";
       overlay.innerHTML =
         '<div class="overlay-card">' + avatarHtml() +
-        "<h1>Игра окончена</h1>" +
+        '<p class="who">Игра ' + plays + " из " + PLAYS_PER_RUN + " сыграна</p>" +
+        '<p class="score">' + score + "</p>" +
+        "<p>Лучшее за подход: " + bestOfRun + "</p>" +
+        '<p class="hint">Нажмите кнопку на телефоне,<br>чтобы сыграть ещё раз</p></div>';
+    } else if (state === "lost") {               // single-play mode
+      overlay.style.display = "flex";
+      overlay.innerHTML =
+        '<div class="overlay-card lost">' + avatarHtml() +
+        "<h1>Вы проиграли</h1>" +
         (player.name ? '<p class="who">' + esc(player.name) + "</p>" : "") +
         '<p class="score">' + score + "</p>" +
-        "<p>Рекорд: " + best + "</p>" +
-        '<p class="hint">Нажмите кнопку на телефоне,<br>чтобы сыграть снова</p></div>';
+        '<p class="hint">Нажмите кнопку на телефоне,<br>чтобы попробовать снова</p></div>';
+    } else if (state === "leaderboard") {        // after the 3rd demo play
+      overlay.style.display = "flex";
+      overlay.innerHTML = leaderboardHtml();
     } else {
       overlay.style.display = "none";
     }
+  }
+
+  function leaderboardHtml() {
+    const rows = (leaderboard || []).map((r) =>
+      '<div class="lb-row' + (r.me ? " me" : "") + '">' +
+      '<span class="rk">' + r.rank + "</span>" +
+      '<span class="nm">' + esc(String(r.name).slice(0, 14)) + (r.me ? " (вы)" : "") + "</span>" +
+      '<span class="sc">' + r.score + "</span></div>"
+    ).join("");
+    return (
+      '<div class="overlay-card leaderboard">' +
+      "<h1>Таблица лидеров</h1>" +
+      '<p class="lb-sub">Ваш результат: <b>' + bestOfRun + "</b> — вы почти в топ-10!</p>" +
+      '<div class="lb">' + rows + "</div>" +
+      '<p class="hint">Нажмите кнопку на телефоне, чтобы сыграть заново</p></div>'
+    );
   }
 
   // ------------------------------ main loop ------------------------------ //

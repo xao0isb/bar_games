@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>Flappy Beer — Управление</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="admin">
+  <div class="admin-wrap">
+    <h1 class="admin-title">🍺 Управление</h1>
+
+    <div class="admin-card">
+      <div class="mode-row">
+        <span class="mode-name">Обычная игра</span>
+        <label class="switch">
+          <input type="checkbox" id="mode-toggle">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <p id="mode-label" class="mode-desc">…</p>
+    </div>
+
+    <p id="admin-status" class="admin-status">Загрузка…</p>
+    <p class="admin-hint">Переключение перезапускает игру на большом экране.</p>
+  </div>
+
+  <script src="/static/admin.js"></script>
+</body>
+</html>

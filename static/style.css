@@ -278,3 +278,109 @@ body.controller {
   letter-spacing: 1px;
   opacity: .8;
 }
+
+/* ===================== HOST: leaderboard + "you lost" ==================== */
+.overlay-card.lost { border-color: var(--red); }
+.overlay-card.lost h1 { color: var(--red); }
+
+.overlay-card.leaderboard { padding: 18px 20px; max-width: 400px; }
+.overlay-card .lb-sub { margin: 2px 0 12px; font-size: 13px; opacity: .92; }
+.overlay-card .lb-sub b { color: var(--amber); }
+.overlay-card .lb { width: 100%; max-width: 340px; margin: 2px auto 0; }
+.lb-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  font-size: 14px;
+  border-bottom: 2px solid rgba(244, 233, 216, .12);
+}
+.lb-row .rk { flex: 0 0 26px; text-align: right; font-weight: 700; color: var(--muted); }
+.lb-row .nm { flex: 1 1 auto; min-width: 0; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-row .sc { flex: 0 0 auto; min-width: 28px; text-align: right; font-weight: 800; color: var(--amber); }
+.lb-row.me { background: var(--amber); color: var(--ink); border-bottom-color: var(--amber); }
+.lb-row.me .rk,
+.lb-row.me .sc { color: var(--ink); }
+
+/* ============================ ADMIN / operator ========================== */
+body.admin {
+  margin: 0;
+  min-height: 100dvh;
+  background: #1a1220;
+  color: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.admin-wrap {
+  width: min(92vw, 420px);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.admin-title {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--amber);
+  text-shadow: 3px 3px 0 var(--ink);
+}
+.admin-card {
+  background: #221830;
+  border: 4px solid var(--ink);
+  box-shadow: 8px 8px 0 rgba(0, 0, 0, .5);
+  padding: 20px;
+}
+.mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.mode-name { font-size: 18px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; }
+.mode-desc { margin: 14px 0 0; font-size: 14px; line-height: 1.5; opacity: .9; text-align: left; }
+.admin-status {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  opacity: .9;
+}
+.admin-status.ok { color: var(--green); }
+.admin-hint {
+  margin: 0;
+  font-size: 12px;
+  opacity: .6;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+/* toggle switch (chunky, arcade) */
+.switch { position: relative; display: inline-block; width: 74px; height: 40px; flex: 0 0 auto; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  background: #3a2a44;
+  border: 3px solid var(--ink);
+  transition: background .15s;
+}
+.slider::before {
+  content: "";
+  position: absolute;
+  height: 28px;
+  width: 28px;
+  left: 3px;
+  top: 3px;
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  transition: transform .15s;
+}
+.switch input:checked + .slider { background: var(--red); }
+.switch input:checked + .slider::before { transform: translateX(34px); }
