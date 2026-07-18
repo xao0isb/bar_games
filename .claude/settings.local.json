@@ -22,7 +22,10 @@
       "Bash(getent group *)",
       "Bash(systemctl is-active *)",
       "Bash(node --check static/host.js)",
-      "Artifact"
+      "Artifact",
+      "Bash(node --check static/controller.js)",
+      "Bash(python3 -)",
+      "Bash(cd *)"
     ]
   }
 }
