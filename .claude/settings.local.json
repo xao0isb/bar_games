@@ -25,7 +25,22 @@
       "Artifact",
       "Bash(node --check static/controller.js)",
       "Bash(python3 -)",
-      "Bash(cd *)"
+      "Bash(cd *)",
+      "Bash(curl -s -o /dev/null -w \"preview.html -> HTTP %{http_code}\\\\n\" http://127.0.0.1:8135/preview.html)",
+      "Skill(claude-in-chrome)",
+      "Bash(timeout 60 chromium --headless=new --no-sandbox --disable-gpu --hide-scrollbars --force-device-scale-factor=2 --window-size=460,980 --virtual-time-budget=2500 --screenshot=/tmp/claude-1000/-home-a-Projects-bar-games/6d7df3df-f770-446a-a50e-0564f9f419b7/scratchpad/preview_shot.png http://127.0.0.1:8135/preview.html)",
+      "Bash(timeout 60 chromium --headless=new --no-sandbox --disable-gpu --hide-scrollbars --force-device-scale-factor=2 --window-size=460,980 --virtual-time-budget=2900 --screenshot=/tmp/claude-1000/-home-a-Projects-bar-games/6d7df3df-f770-446a-a50e-0564f9f419b7/scratchpad/shot_soju.png http://127.0.0.1:8135/preview.html)",
+      "Bash(timeout 60 chromium --headless=new --no-sandbox --disable-gpu --hide-scrollbars --force-device-scale-factor=2 --window-size=460,980 --virtual-time-budget=4900 --screenshot=/tmp/claude-1000/-home-a-Projects-bar-games/6d7df3df-f770-446a-a50e-0564f9f419b7/scratchpad/shot_shot.png http://127.0.0.1:8135/preview.html)",
+      "Bash(timeout 60 chromium --headless=new --no-sandbox --disable-gpu --hide-scrollbars --force-device-scale-factor=2 --window-size=460,760 --virtual-time-budget=1200 --screenshot=/tmp/claude-1000/-home-a-Projects-bar-games/6d7df3df-f770-446a-a50e-0564f9f419b7/scratchpad/shot_all3.png file:///tmp/claude-1000/-home-a-Projects-bar-games/6d7df3df-f770-446a-a50e-0564f9f419b7/scratchpad/preview_test.html)",
+      "Bash(echo \"uvicorn pid $!\")",
+      "Bash(curl -s -o /dev/null -w \"GET / -> HTTP %{http_code} \\(redirect to %{redirect_url}\\)\\\\n\" http://127.0.0.1:8123/)",
+      "Bash(curl -s -o /dev/null -w \"GET / -> HTTP %{http_code}\\\\n\" -L http://127.0.0.1:8123/)",
+      "Bash(curl -s http://127.0.0.1:8123/health)",
+      "Bash(timeout 60 chromium --headless=new --no-sandbox --disable-gpu --hide-scrollbars --window-size=1280,800 --virtual-time-budget=1800 --screenshot=/tmp/claude-1000/-home-a-Projects-bar-games/6d7df3df-f770-446a-a50e-0564f9f419b7/scratchpad/host_screen.png http://127.0.0.1:8123/)",
+      "Bash(pkill -f \"http.server 8135\")",
+      "Bash(git -C /home/a/Projects/bar_games status --short)",
+      "Bash(git -C /home/a/Projects/bar_games diff --stat)",
+      "Bash(curl -s -o /dev/null -w \"8135: %{http_code}\\\\n\" --max-time 2 http://127.0.0.1:8135/)"
     ]
   }
 }

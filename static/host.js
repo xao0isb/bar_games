@@ -13,22 +13,24 @@
   const overlay = document.getElementById("overlay");
 
   // World space (physics). Everything is drawn in these units; the context is
-  // scaled by S device-pixels-per-unit so the result is crisp, not pixelated.
+  // scaled so 1 world unit spans many device pixels -> crisp, never pixelated.
   const W = 144, H = 192;
-  let S = 3;
-  function resize() {
+  // The canvas backing store tracks the real display resolution (CSS box size ×
+  // devicePixelRatio). syncSize() runs each frame and only reallocates when the
+  // size actually changes, so it also self-corrects once layout settles.
+  canvas.width = 432;
+  canvas.height = 576;
+  function syncSize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
-    const cssW = canvas.clientWidth ||
-      (canvas.parentElement && canvas.parentElement.clientWidth) || 432;
-    S = Math.max(3, Math.min(8, Math.round((cssW * dpr) / W)));
-    canvas.width = W * S;
-    canvas.height = H * S;
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
+    const cw = Math.round((canvas.clientWidth || 432) * dpr);
+    const ch = Math.round((canvas.clientHeight || 576) * dpr);
+    if (cw > 0 && ch > 0 && (cw !== canvas.width || ch !== canvas.height)) {
+      canvas.width = cw;
+      canvas.height = ch;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+    }
   }
-  window.addEventListener("resize", resize);
-  window.addEventListener("load", resize);
-  resize();
 
   // ---- tunables (world runs in the 144x192 space) ----
   const GRAVITY = 450;
@@ -253,45 +255,65 @@
     ctx.restore();
   }
 
-  // A frosty mug of amber beer with a foamy head at the rim.
+  // A frosty mug of amber beer: cylindrical glass, a foamy head at the rim,
+  // rising bubbles and a chunky handle — reads as "beer" even when stretched tall.
   function drinkBeer(len) {
     const w = OBST_W;
-    const foamH = Math.max(6, Math.min(11, len * 0.22));
+    const foamH = Math.max(7, Math.min(13, len * 0.24));
+    // cylindrical amber body
     const g = ctx.createLinearGradient(0, 0, w, 0);
     g.addColorStop(0, COL.beerEdge);
-    g.addColorStop(0.16, COL.beerSh);
-    g.addColorStop(0.42, COL.beerHi);
+    g.addColorStop(0.14, COL.beerSh);
+    g.addColorStop(0.4, COL.beerHi);
     g.addColorStop(0.5, COL.beer);
     g.addColorStop(0.72, COL.beerSh);
     g.addColorStop(1, COL.beerEdge);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, len);
     // glossy vertical streak
-    ctx.fillStyle = "rgba(255,255,255,0.16)";
-    ctx.fillRect(w * 0.3, foamH, 2, len - foamH);
+    ctx.fillStyle = "rgba(255,255,255,0.18)";
+    ctx.fillRect(w * 0.26, foamH, 2.4, len - foamH);
     // rising bubbles
     ctx.fillStyle = "rgba(255,247,234,0.55)";
     const span = Math.max(1, len - foamH - 2);
-    for (let i = 0; i < 6; i++) {
-      const bx = w * (0.32 + 0.12 * (i % 3));
-      const by = foamH + 2 + mod(-now * 0.012 + i * 97, span);
+    for (let i = 0; i < 7; i++) {
+      const bx = w * (0.28 + 0.14 * (i % 3));
+      const by = foamH + 2 + mod(-now * 0.013 + i * 91, span);
       ctx.beginPath();
-      ctx.arc(bx, by, 0.6 + (i % 2) * 0.5, 0, 7);
+      ctx.arc(bx, by, 0.6 + (i % 2) * 0.6, 0, 7);
       ctx.fill();
     }
-    // foam head at the rim
+    // chunky glass handle on the side, near the rim
+    if (len > 26) {
+      const hy = foamH + 8, hr = 6;
+      ctx.lineCap = "round";
+      ctx.strokeStyle = COL.beerEdge;
+      ctx.lineWidth = 4.6;
+      ctx.beginPath();
+      ctx.arc(w - 2, hy, hr, -1.3, 1.3);
+      ctx.stroke();
+      ctx.strokeStyle = COL.beerHi;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(w - 2, hy, hr, -1.3, 1.3);
+      ctx.stroke();
+      ctx.lineCap = "butt";
+    }
+    // foamy head overflowing the rim in rounded lumps, with a couple of drips
     ctx.fillStyle = COL.foam;
     ctx.fillRect(0, 0, w, foamH);
     for (let i = 0; i < 5; i++) {
       ctx.beginPath();
-      ctx.arc((i + 0.5) * w / 5, foamH - 0.2, 1.1 + (i % 2) * 0.5, 0, 7);
+      ctx.arc((i + 0.5) * w / 5, foamH - 0.3, 1.5 + (i % 2) * 0.7, 0, 7);
       ctx.fill();
     }
+    ctx.fillRect(w * 0.22, foamH, 1.6, 3.4);
+    ctx.fillRect(w * 0.66, foamH, 1.4, 2.2);
     ctx.fillStyle = COL.foamSh;
-    ctx.fillRect(0, foamH, w, 0.8);
+    ctx.fillRect(0, foamH, w, 0.9);
     ctx.beginPath();
-    ctx.arc(w * 0.36, foamH * 0.44, 0.9, 0, 7);
-    ctx.arc(w * 0.62, foamH * 0.32, 0.7, 0, 7);
+    ctx.arc(w * 0.36, foamH * 0.5, 1.0, 0, 7);
+    ctx.arc(w * 0.64, foamH * 0.36, 0.8, 0, 7);
     ctx.fill();
     // outline
     ctx.strokeStyle = COL.beerEdge;
@@ -299,20 +321,20 @@
     ctx.strokeRect(0.5, 0.5, w - 1, len - 1);
   }
 
-  // The signature green soju bottle: neck + cap at the mouth, white label.
+  // The signature green soju bottle: slim neck, green cap, white paper label.
   function drinkSoju(len) {
     const w = OBST_W;
     const grad = () => {
       const g = ctx.createLinearGradient(0, 0, w, 0);
       g.addColorStop(0, COL.sojuEdge);
-      g.addColorStop(0.16, COL.sojuSh);
+      g.addColorStop(0.15, COL.sojuSh);
       g.addColorStop(0.42, COL.sojuHi);
       g.addColorStop(0.5, COL.soju);
       g.addColorStop(0.74, COL.sojuSh);
       g.addColorStop(1, COL.sojuEdge);
       return g;
     };
-    if (len < 24) {                       // too short for a bottle -> stub
+    if (len < 24) {                        // too short for a bottle -> plain stub
       ctx.fillStyle = grad();
       ctx.fillRect(0, 0, w, len);
       ctx.strokeStyle = COL.sojuEdge;
@@ -320,8 +342,8 @@
       ctx.strokeRect(0.5, 0.5, w - 1, len - 1);
       return;
     }
-    const capH = 4, neckH = 7, shoulderH = 6, bodyTop = capH + neckH + shoulderH;
-    const neckW = 7, neckX = (w - neckW) / 2;
+    const capH = 5, neckH = 8, shoulderH = 7, bodyTop = capH + neckH + shoulderH;
+    const neckW = 8, neckX = (w - neckW) / 2;
     const green = grad();
     // body
     ctx.fillStyle = green;
@@ -336,81 +358,90 @@
     ctx.fillStyle = green;
     ctx.fill();
     // neck
-    ctx.fillStyle = green;
     ctx.fillRect(neckX, capH, neckW, neckH + 1);
-    // metal cap
+    // green screw cap with ridges
     const cg = ctx.createLinearGradient(neckX, 0, neckX + neckW, 0);
-    cg.addColorStop(0, COL.capSh);
-    cg.addColorStop(0.4, COL.capHi);
-    cg.addColorStop(1, COL.capSh);
+    cg.addColorStop(0, COL.sojuEdge);
+    cg.addColorStop(0.4, COL.sojuHi);
+    cg.addColorStop(1, COL.sojuSh);
     ctx.fillStyle = cg;
     ctx.fillRect(neckX - 0.5, 0, neckW + 1, capH);
-    ctx.fillStyle = "rgba(0,0,0,0.12)";
-    ctx.fillRect(neckX - 0.5, capH - 0.8, neckW + 1, 0.8);
-    // label
-    const labY = bodyTop + (len - bodyTop) * 0.26;
-    const labH = Math.min(17, (len - bodyTop) * 0.5);
+    ctx.fillStyle = "rgba(0,0,0,0.16)";
+    ctx.fillRect(neckX - 0.5, capH - 1, neckW + 1, 1);
+    ctx.fillRect(neckX + 1.5, 1, 0.7, capH - 2);
+    ctx.fillRect(neckX + neckW - 2.2, 1, 0.7, capH - 2);
+    // white paper label: header stripe, red logo dot, text lines
+    const labY = bodyTop + (len - bodyTop) * 0.24;
+    const labH = Math.min(20, (len - bodyTop) * 0.52);
     ctx.fillStyle = COL.label;
     ctx.fillRect(1.5, labY, w - 3, labH);
-    ctx.fillStyle = COL.labelStripe;
-    ctx.fillRect(1.5, labY, w - 3, 2.2);
-    ctx.fillStyle = COL.labelAccent;
-    ctx.beginPath();
-    ctx.arc(w / 2, labY + labH * 0.4, 1.6, 0, 7);
-    ctx.fill();
-    ctx.fillStyle = COL.labelText;
-    ctx.fillRect(4, labY + labH * 0.62, w - 8, 1);
-    ctx.fillRect(6, labY + labH * 0.62 + 2.5, w - 12, 1);
+    if (labH > 6) {
+      ctx.fillStyle = COL.labelStripe;
+      ctx.fillRect(1.5, labY, w - 3, 2.4);
+      ctx.fillStyle = COL.labelAccent;
+      ctx.beginPath();
+      ctx.arc(w / 2, labY + labH * 0.4, 1.8, 0, 7);
+      ctx.fill();
+      ctx.fillStyle = COL.labelText;
+      ctx.fillRect(4.5, labY + labH * 0.68, w - 9, 1);
+      if (labH > 12) ctx.fillRect(6.5, labY + labH * 0.68 + 2.6, w - 13, 1);
+    }
     // gloss + outline
     ctx.fillStyle = "rgba(255,255,255,0.16)";
-    ctx.fillRect(w * 0.28, bodyTop, 2.2, len - bodyTop);
+    ctx.fillRect(w * 0.26, bodyTop, 2.4, len - bodyTop);
     ctx.strokeStyle = COL.sojuEdge;
     ctx.lineWidth = 1;
     ctx.strokeRect(0.5, bodyTop, w - 1, len - bodyTop - 0.5);
     ctx.strokeRect(neckX - 0.5, 0.5, neckW + 1, capH + neckH);
   }
 
-  // A stack of shot glasses filled with golden liquor.
+  // A stack of thick shot glasses filled with golden liquor.
   function drinkShot(len) {
     const w = OBST_W;
-    const n = Math.max(1, Math.round(len / 15));
+    const n = Math.max(1, Math.round(len / 18));
     const h = len / n;
     for (let i = 0; i < n; i++) shotGlass(i * h, w, h);
   }
   function shotGlass(y0, w, h) {
     ctx.save();
     ctx.translate(0, y0);
-    // glass body
+    const inset = 1.5;
+    const bw = w - inset * 2;
+    // glass body with bright vertical reflections
     const g = ctx.createLinearGradient(0, 0, w, 0);
     g.addColorStop(0, COL.glassEdge);
-    g.addColorStop(0.2, COL.glassSh);
-    g.addColorStop(0.44, COL.glassHi);
-    g.addColorStop(0.56, COL.glass);
-    g.addColorStop(0.8, COL.glassSh);
+    g.addColorStop(0.18, COL.glassSh);
+    g.addColorStop(0.42, COL.glassHi);
+    g.addColorStop(0.58, COL.glass);
+    g.addColorStop(0.82, COL.glassSh);
     g.addColorStop(1, COL.glassEdge);
     ctx.fillStyle = g;
-    ctx.fillRect(1, 0, w - 2, h);
-    // liquor
-    const liqTop = h * 0.16, liqH = h * 0.5;
+    ctx.fillRect(inset, 0.5, bw, h - 1);
+    // golden liquor (headroom under the rim)
+    const liqTop = h * 0.22, liqH = h * 0.5;
     const lg = ctx.createLinearGradient(0, 0, w, 0);
     lg.addColorStop(0, COL.liquorDark);
     lg.addColorStop(0.4, COL.liquorHi);
     lg.addColorStop(0.52, COL.liquor);
     lg.addColorStop(1, COL.liquorDark);
     ctx.fillStyle = lg;
-    ctx.fillRect(2, liqTop, w - 4, liqH);
+    ctx.fillRect(inset + 1, liqTop, bw - 2, liqH);
+    // bright meniscus at the surface
     ctx.fillStyle = COL.meniscus;
-    ctx.fillRect(2, liqTop, w - 4, 1);              // bright surface line
-    // thick base + rim + side reflection
+    ctx.fillRect(inset + 1, liqTop, bw - 2, 1);
+    // thick base
     ctx.fillStyle = "rgba(255,255,255,0.22)";
-    ctx.fillRect(2, h - 3, w - 4, 2);
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
-    ctx.fillRect(2, 0.5, w - 4, 1);
-    ctx.fillStyle = "rgba(255,255,255,0.35)";
-    ctx.fillRect(w * 0.28, 1, 1.4, h - 2);
+    ctx.fillRect(inset + 1, h - 3.5, bw - 2, 2.4);
+    // rim highlight
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    ctx.fillRect(inset + 1, 1, bw - 2, 1.1);
+    // vertical reflection streak
+    ctx.fillStyle = "rgba(255,255,255,0.4)";
+    ctx.fillRect(w * 0.3, 2, 1.4, h - 4);
+    // outline
     ctx.strokeStyle = COL.glassEdge;
-    ctx.lineWidth = 0.8;
-    ctx.strokeRect(1.4, 0.4, w - 2.8, h - 0.8);
+    ctx.lineWidth = 0.9;
+    ctx.strokeRect(inset + 0.5, 0.5, bw - 1, h - 1);
     ctx.restore();
   }
 
@@ -508,7 +539,9 @@
   }
 
   function render() {
-    ctx.setTransform(S, 0, 0, S, 0, 0);   // draw in world units, S px per unit
+    syncSize();
+    // scale the 144×192 world onto the full-resolution backing store
+    ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
     drawBackground();
     for (const d of drinks) drawObstacle(d);
     drawGround();
