@@ -81,6 +81,8 @@
   let bestOfRun = 0;         // best score across the current run
   let hasController = false; // is a phone connected right now?
   let leaderboard = null;    // rows, built when we enter the "leaderboard" state
+  const RESTART_LOCK_MS = 3000;  // after a crash, ignore "play again" taps this long
+  let restartAt = 0;         // loop-clock time when the restart tap is allowed again
 
   function reset() {
     hero = { y: H / 2, vy: 0 };
@@ -118,9 +120,11 @@
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
   }
   function sendState() {
+    const terminal = state === "gameover" || state === "lost" || state === "leaderboard";
+    const lock = terminal ? Math.max(0, Math.round(restartAt - now)) : 0;
     send({
       type: "state", state, score, best, name: player.name,
-      single: singlePlay, plays, total: PLAYS_PER_RUN,
+      single: singlePlay, plays, total: PLAYS_PER_RUN, lock,
     });
   }
 
@@ -195,13 +199,10 @@
       sendState();
     } else if (state === "playing") {
       hero.vy = FLAP_V;
-    } else if (state === "gameover") {   // demo: on to the next of the 3 plays
-      startPlaying();
-    } else if (state === "lost") {       // single mode: try again (still one life)
-      startPlaying();
-    } else if (state === "leaderboard") {  // demo finished: start a brand-new run
-      startRun();
-      setState("ready");
+    } else if (state === "gameover" || state === "lost" || state === "leaderboard") {
+      if (now < restartAt) return;         // restart stays locked for a moment after the crash
+      if (state === "leaderboard") { startRun(); setState("ready"); }  // demo finished -> new run
+      else startPlaying();                 // gameover -> next demo play; lost -> retry
     }
   }
 
@@ -209,6 +210,7 @@
   function endPlay() {
     plays += 1;
     bestOfRun = Math.max(bestOfRun, score);
+    restartAt = now + RESTART_LOCK_MS;     // lock the "play again" tap for a few seconds
     if (singlePlay) {
       setState("lost");
     } else if (plays >= PLAYS_PER_RUN) {

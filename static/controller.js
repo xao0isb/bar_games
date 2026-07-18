@@ -28,6 +28,8 @@
   let singlePlay = false; // demo (3 plays + leaderboard) vs single play
   let playsDone = 0;      // plays finished in the current run
   let playsTotal = 3;
+  let lockUntil = 0;      // restart is disabled until this time (Date.now clock)
+  let lockTO = null;      // pending countdown tick
 
   const proto = location.protocol === "https:" ? "wss:" : "ws:";
   const wsUrl = `${proto}//${location.host}/ws/${SESSION_ID}/controller`;
@@ -48,6 +50,7 @@
         if (typeof m.single === "boolean") singlePlay = m.single;
         if (typeof m.plays === "number") playsDone = m.plays;
         if (typeof m.total === "number") playsTotal = m.total;
+        if (typeof m.lock === "number") { if (m.lock > 0) setLock(m.lock); else clearLock(); }
         updateLabel();
       } else if (m.type === "host_status") {
         hostConnected = !!m.connected;
@@ -128,6 +131,7 @@
   // ------------------------------- flap --------------------------------- //
   function flap() {
     if (!joined) return;
+    if (Date.now() < lockUntil) return;   // restart is locked for a moment after a loss
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "flap" }));
       if (navigator.vibrate) navigator.vibrate(15);
@@ -144,8 +148,34 @@
 
   function setHint(t) { if (hintEl) hintEl.textContent = t; }
 
+  // After a loss the host locks restart for a few seconds; show a countdown and
+  // make the button unpressable until it expires.
+  function tickLock() {
+    lockTO = null;
+    const remain = lockUntil - Date.now();
+    if (remain > 0) {
+      btn.classList.add("locked");
+      labelEl.textContent = String(Math.ceil(remain / 1000));
+      setHint("Рано! Подождите…");
+      lockTO = setTimeout(tickLock, 150);
+    } else {
+      btn.classList.remove("locked");
+      updateLabel();
+    }
+  }
+  function setLock(ms) {
+    lockUntil = Date.now() + ms;
+    if (!lockTO) tickLock();
+  }
+  function clearLock() {
+    lockUntil = 0;
+    if (lockTO) { clearTimeout(lockTO); lockTO = null; }
+    btn.classList.remove("locked");
+  }
+
   function updateLabel() {
     if (!joined) return;
+    if (Date.now() < lockUntil) return;   // the countdown owns the button while locked
     if (!hostConnected) { labelEl.textContent = "Ждём экран"; setHint("Ждём большой экран…"); return; }
     const nextPlay = Math.min(playsDone + 1, playsTotal);
     switch (gameState) {
