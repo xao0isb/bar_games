@@ -69,7 +69,7 @@
 
   // ---- state ----
   const PLAYS_PER_RUN = 3;
-  let state = "waiting";     // waiting | lobby | ready | playing | gameover | leaderboard | lost
+  let state = "waiting";     // waiting | lobby | ready | playing | gameover | leaderboard | lost | won
   let score = 0;
   let best = Number(localStorage.getItem("flappybeer_best") || 0);
   let hero, drinks, groundX = 0;
@@ -83,11 +83,21 @@
   let leaderboard = null;    // rows, built when we enter the "leaderboard" state
   const RESTART_LOCK_MS = 3000;  // after a crash, ignore "play again" taps this long
   let restartAt = 0;         // loop-clock time when the restart tap is allowed again
+  // Single-play "finish": after MAX_OBSTACLES drinks a collectible beer mug appears;
+  // catching it wins the game (state "won"). Demo mode is unaffected.
+  const MAX_OBSTACLES = 6;
+  const FINISH_R = 11;       // beer-mug collectible radius (generous)
+  let spawned = 0;           // drinks spawned this play
+  let finish = null;         // { x, y } beer-mug collectible, or null
+  let finishActive = false;  // finish phase started (no more drinks spawn)
 
   function reset() {
     hero = { y: H / 2, vy: 0 };
     drinks = [];
     score = 0;
+    spawned = 0;
+    finish = null;
+    finishActive = false;
   }
   // A "run" is one demo session (up to PLAYS_PER_RUN plays).
   function startRun() {
@@ -120,7 +130,7 @@
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
   }
   function sendState() {
-    const terminal = state === "gameover" || state === "lost" || state === "leaderboard";
+    const terminal = state === "gameover" || state === "lost" || state === "leaderboard" || state === "won";
     const lock = terminal ? Math.max(0, Math.round(restartAt - now)) : 0;
     send({
       type: "state", state, score, best, name: player.name,
@@ -199,10 +209,10 @@
       sendState();
     } else if (state === "playing") {
       hero.vy = FLAP_V;
-    } else if (state === "gameover" || state === "lost" || state === "leaderboard") {
-      if (now < restartAt) return;         // restart stays locked for a moment after the crash
+    } else if (state === "gameover" || state === "lost" || state === "leaderboard" || state === "won") {
+      if (now < restartAt) return;         // restart stays locked for a moment after the result
       if (state === "leaderboard") { startRun(); setState("ready"); }  // demo finished -> new run
-      else startPlaying();                 // gameover -> next demo play; lost -> retry
+      else startPlaying();                 // gameover -> next demo play; lost/won -> retry
     }
   }
 
@@ -256,6 +266,28 @@
     const gapY = Math.round(minY + Math.random() * (maxY - minY));
     const kind = DRINKS[Math.floor(Math.random() * DRINKS.length)];
     drinks.push({ x: W, gapY, kind, passed: false });
+    spawned += 1;
+  }
+
+  // ---- single-play finish: a collectible flying beer mug ----
+  function reachY() {                       // a comfortably reachable height (near the player)
+    const lo = 24, hi = H - GROUND_H - 20;
+    return Math.max(lo, Math.min(hi, hero.y));
+  }
+  function spawnFinish() { finish = { x: W + 10, y: reachY() }; }
+  function respawnFinish() { finish.x = W + 10; finish.y = reachY(); }  // missed -> another pass
+  function collectFinish() {
+    if (!finish) return false;
+    const dx = finish.x - PLAYER_X, dy = finish.y - hero.y;
+    const rr = PLAYER_R + FINISH_R;
+    return dx * dx + dy * dy < rr * rr;
+  }
+  function win() {
+    best = Math.max(best, score);
+    localStorage.setItem("flappybeer_best", String(best));
+    restartAt = now + RESTART_LOCK_MS;
+    finish = null;
+    setState("won");
   }
 
   function collides() {
@@ -284,7 +316,10 @@
       hero.y += hero.vy * dt;
       if (hero.y < PLAYER_R) { hero.y = PLAYER_R; hero.vy = 0; }
 
-      if (drinks.length === 0 || drinks[drinks.length - 1].x <= W - SPACING) {
+      const lastFar = drinks.length === 0 || drinks[drinks.length - 1].x <= W - SPACING;
+      if (singlePlay && spawned >= MAX_OBSTACLES) {
+        if (!finishActive && lastFar) { finishActive = true; spawnFinish(); }  // 6 drinks -> beer finish
+      } else if (lastFar) {
         spawnDrink();
       }
       for (const d of drinks) {
@@ -296,6 +331,12 @@
         }
       }
       drinks = drinks.filter((d) => d.x + OBST_W > -6);
+
+      if (finish) {
+        finish.x -= SPEED * dt;
+        if (collectFinish()) { win(); return; }               // caught the beer -> victory
+        if (finish.x < PLAYER_X - 26) respawnFinish();         // missed -> bring it back
+      }
 
       if (collides()) {
         best = Math.max(best, score);
@@ -632,12 +673,53 @@
     }
   }
 
+  // The collectible flying beer mug (single-play finish), with a soft glow.
+  function drawFinish() {
+    const cx = finish.x, cy = finish.y + Math.sin(now / 300) * 2;
+    const gr = 14 + Math.sin(now / 200) * 2;
+    const glow = ctx.createRadialGradient(cx, cy, 2, cx, cy, gr);
+    glow.addColorStop(0, "rgba(255,224,138,0.55)");
+    glow.addColorStop(1, "rgba(255,224,138,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(cx, cy, gr, 0, 7); ctx.fill();
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    const w = 16, h = 20, x0 = -w / 2, y0 = -h / 2;
+    // handle
+    ctx.lineCap = "round";
+    ctx.strokeStyle = COL.beerEdge; ctx.lineWidth = 3.4;
+    ctx.beginPath(); ctx.arc(x0 + w - 1, 2, 5.5, -1.2, 1.2); ctx.stroke();
+    ctx.strokeStyle = COL.beerHi; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(x0 + w - 1, 2, 5.5, -1.2, 1.2); ctx.stroke();
+    ctx.lineCap = "butt";
+    // amber body
+    const bg = ctx.createLinearGradient(x0, 0, x0 + w, 0);
+    bg.addColorStop(0, COL.beerEdge); bg.addColorStop(0.15, COL.beerSh);
+    bg.addColorStop(0.45, COL.beerHi); bg.addColorStop(0.55, COL.beer);
+    bg.addColorStop(0.85, COL.beerSh); bg.addColorStop(1, COL.beerEdge);
+    ctx.fillStyle = bg;
+    ctx.fillRect(x0, y0 + 5, w, h - 5);
+    // bubbles
+    ctx.fillStyle = "rgba(255,247,234,0.6)";
+    for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(x0 + 4 + (i % 3) * 4, y0 + 9 + i * 3, 0.9, 0, 7); ctx.fill(); }
+    // foam head
+    ctx.fillStyle = COL.foam;
+    ctx.fillRect(x0, y0, w, 6);
+    for (let i = 0; i < 4; i++) { ctx.beginPath(); ctx.arc(x0 + (i + 0.5) * w / 4, y0, 2, 0, 7); ctx.fill(); }
+    // outline
+    ctx.strokeStyle = COL.beerEdge; ctx.lineWidth = 1;
+    ctx.strokeRect(x0 + 0.5, y0 + 0.5, w - 1, h - 1);
+    ctx.restore();
+  }
+
   function render() {
     syncSize();
     // scale the 144×192 world onto the full-resolution backing store
     ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
     drawBackground();
     for (const d of drinks) drawObstacle(d);
+    if (finish) drawFinish();
     drawGround();
     drawPlayer();
     drawHud();
@@ -685,6 +767,15 @@
     } else if (state === "leaderboard") {        // after the 3rd demo play
       overlay.style.display = "flex";
       overlay.innerHTML = leaderboardHtml();
+    } else if (state === "won") {                // single-play: caught the beer
+      overlay.style.display = "flex";
+      overlay.innerHTML =
+        '<div class="overlay-card won">' + avatarHtml() +
+        "<h1>🍺 Победа!</h1>" +
+        (player.name ? '<p class="who">' + esc(player.name) + "</p>" : "") +
+        "<p>Вы поймали пиво!</p>" +
+        '<p class="score">' + score + "</p>" +
+        '<p class="hint">Нажмите кнопку на телефоне,<br>чтобы сыграть снова</p></div>';
     } else {
       overlay.style.display = "none";
     }

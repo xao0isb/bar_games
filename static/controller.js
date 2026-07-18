@@ -201,6 +201,10 @@
         labelEl.textContent = "ЗАНОВО";
         setHint("Вы проиграли — нажмите, чтобы попробовать снова");
         break;
+      case "won":
+        labelEl.textContent = "ЗАНОВО";
+        setHint("🍺 Победа! Нажмите, чтобы сыграть снова");
+        break;
       default:
         labelEl.textContent = "ПРЫЖОК";
         setHint("Нажимайте, чтобы прыгать");
