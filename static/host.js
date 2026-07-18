@@ -232,10 +232,13 @@
   }
 
   // ---- fake leaderboard (demo): the player lands at #12, just shy of the top 10 ----
+  // Playful bar/beer-themed nicknames for the fake players.
   const LB_NAMES = [
-    "Максим", "Софи", "Дмитрий", "Алина", "Иван", "Настя", "Олег", "Юля",
-    "Минхо", "Джису", "Хёну", "Лена", "Артём", "Вика", "Пабло", "Даша",
-    "Рома", "Соня", "Женя", "Тимур", "Марк", "Катя",
+    "ПивнойБарон", "СоджуСамурай", "ШотМастер", "ПенаЛорд", "Похмелыч",
+    "КрафтКороль", "БарменТони", "Литрбол", "ЧёткийБоря", "ГусьЛапчатый",
+    "БатяВЗдании", "Кракен777", "Хмельник", "Дринкмастер", "ПинтаЛютая",
+    "Стопарь", "Полторашка", "ТёмныйЭль", "МаэстроПива", "БезТормозов",
+    "КапитанСоджу", "ЗлойБариста", "ФлапперПро", "БочкаГнева",
   ];
   function shuffled(arr) {
     const a = arr.slice();
@@ -247,11 +250,11 @@
   }
   function buildLeaderboard(playerScore) {
     const names = shuffled(LB_NAMES).slice(0, 11);
-    let s = playerScore + 1 + Math.floor(Math.random() * 2);
+    let s = playerScore + 1;                // #11 sits just above the player
     const scores = [];
-    for (let i = 0; i < 11; i++) {         // 11 bots, tightly clustered just above
+    for (let i = 0; i < 11; i++) {          // 11 bots in a small, tight cluster above the player
       scores.push(s);
-      s += 1 + Math.floor(Math.random() * 2);
+      if (Math.random() < 0.55) s += 1;     // gentle rise, ties allowed -> modest scores
     }
     scores.reverse();                       // #1 highest ... #11 just above the player
     const rows = names.map((name, i) => ({ rank: i + 1, name, score: scores[i], me: false }));
